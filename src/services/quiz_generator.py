@@ -16,6 +16,8 @@ class QuizGenerator:
         
         try:
             quiz_data = json.loads(response)
+            # Convert solution dict to string if needed
+            quiz_data = self._normalize_solutions(quiz_data)
             return QuizResponse(**quiz_data)
         except json.JSONDecodeError:
             # Fallback: extract JSON from markdown code blocks
@@ -23,6 +25,8 @@ class QuizGenerator:
             json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
             if json_match:
                 quiz_data = json.loads(json_match.group(1))
+                # Convert solution dict to string if needed
+                quiz_data = self._normalize_solutions(quiz_data)
                 return QuizResponse(**quiz_data)
             raise ValueError("Unable to parse AI response")
     
@@ -59,7 +63,7 @@ class QuizGenerator:
 **Yêu cầu:**
 1. Tạo câu hỏi đa dạng (trắc nghiệm, tự luận ngắn)
 2. Mỗi câu có điểm phù hợp với độ khó (dễ: 1-2đ, TB: 3-4đ, khó: 5-6đ)
-3. Bao gồm lời giải chi tiết cho từng câu
+3. Bao gồm lời giải chi tiết cho từng câu (PHẢI LÀ CHUỖI TEXT, KHÔNG PHẢI OBJECT)
 4. Sử dụng LaTeX cho công thức toán học
 5. Câu hỏi theo thứ tự từ dễ đến khó
 6. Phù hợp với trình độ học sinh cấp {request.grade_level}
@@ -83,7 +87,7 @@ class QuizGenerator:
                 {{"id": "D", "text": "Đáp án D", "is_correct": false}}
             ],
             "correct_answer": "B" hoặc "đáp án đúng",
-            "solution": "Lời giải chi tiết từng bước",
+            "solution": "Lời giải chi tiết từng bước dưới dạng TEXT. Ví dụ: Bước 1: ...\nBước 2: ...\nĐáp án: ...",
             "difficulty": "easy" hoặc "medium" hoặc "hard",
             "points": điểm_số,
             "tags": ["tag1", "tag2"]
@@ -93,13 +97,40 @@ class QuizGenerator:
 
 **Lưu ý quan trọng:**
 - Công thức toán: $x^2$, $\\frac{{a}}{{b}}$, $\\sqrt{{x}}$
-- Lời giải phải có các bước rõ ràng
+- Lời giải (solution) PHẢI là chuỗi text thuần túy, KHÔNG ĐƯỢC là object/dictionary
+- Lời giải phải có các bước rõ ràng, ngăn cách bởi dấu xuống dòng
 - Câu trắc nghiệm: 4 đáp án, 1 đúng
 - Câu tự luận: có rubric chấm điểm
 - Tổng điểm = tổng điểm các câu
 """
         
         return prompt
+    
+    def _normalize_solutions(self, quiz_data: dict) -> dict:
+        """
+        Convert solution dictionaries to formatted strings
+        """
+        if "questions" in quiz_data:
+            for question in quiz_data["questions"]:
+                if "solution" in question and isinstance(question["solution"], dict):
+                    # Convert dict with steps to formatted string
+                    steps = question["solution"]
+                    solution_parts = []
+                    
+                    # Sort keys to maintain step order
+                    sorted_keys = sorted(steps.keys())
+                    for key in sorted_keys:
+                        if key.startswith('step_') or key.startswith('Step'):
+                            solution_parts.append(f"{steps[key]}")
+                        elif key == 'answer' or key == 'final_answer':
+                            solution_parts.append(f"Đáp án: {steps[key]}")
+                        else:
+                            solution_parts.append(f"{steps[key]}")
+                    
+                    # Join all parts with newlines
+                    question["solution"] = "\n".join(solution_parts)
+        
+        return quiz_data
     
     def _calculate_points_distribution(self, request: QuizRequest) -> dict:
         """
