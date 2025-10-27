@@ -54,13 +54,16 @@ def get_gemini_instance(prompt_type: str = "default"):
 @app.get("/")
 async def root():
     return {
-        "service": "Math AI Learning Platform - AI Service",
-        "version": "1.0.0",
-        "endpoints": {
-            "chat": "/api/v1/chat",
-            "lesson_plan": "/api/v1/generate/lesson-plan",
-            "questions": "/api/v1/generate/questions",
-            "quiz": "/api/v1/generate/quiz"
+        "success": True,
+        "data": {
+            "service": "Math AI Learning Platform - AI Service",
+            "version": "1.0.0",
+            "endpoints": {
+                "chat": "/api/v1/chat",
+                "lesson_plan": "/api/v1/generate/lesson-plan",
+                "questions": "/api/v1/generate/questions",
+                "quiz": "/api/v1/generate/quiz"
+            }
         }
     }
 
@@ -82,11 +85,11 @@ async def chat_with_ai(request: ChatRequest):
         gemini = get_gemini_instance("default")
         chat_service = ChatService(gemini)
         result = chat_service.chat(request)
-        return result
+        return {"success": True, "data": result.model_dump()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": False, "error": {"code": 500, "message": str(e)}}
 
-@app.post("/api/v1/generate/lesson-plan", response_model=LessonPlanResponse)
+@app.post("/api/v1/generate/lesson-plan")
 async def generate_lesson_plan(request: LessonPlanRequest):
     """
     Generate a detailed lesson plan for math topics
@@ -99,11 +102,11 @@ async def generate_lesson_plan(request: LessonPlanRequest):
         gemini = get_gemini_instance("lesson_plan")
         generator = LessonPlanGenerator(gemini)
         result = generator.generate(request)
-        return result
+        return {"success": True, "data": result.model_dump()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": False, "error": {"code": 500, "message": str(e)}}
 
-@app.post("/api/v1/generate/questions", response_model=QuestionResponse)
+@app.post("/api/v1/generate/questions")
 async def generate_questions(request: QuestionRequest):
     """
     Generate math questions
@@ -118,11 +121,11 @@ async def generate_questions(request: QuestionRequest):
         gemini = get_gemini_instance("question_generator")
         generator = QuestionGenerator(gemini)
         result = generator.generate(request)
-        return result
+        return {"success": True, "data": result.model_dump()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": False, "error": {"code": 500, "message": str(e)}}
 
-@app.post("/api/v1/generate/quiz", response_model=QuizResponse)
+@app.post("/api/v1/generate/quiz")
 async def generate_quiz(request: QuizRequest):
     """
     Generate a complete quiz/test
@@ -139,9 +142,9 @@ async def generate_quiz(request: QuizRequest):
         gemini = get_gemini_instance("quiz_generator")
         generator = QuizGenerator(gemini)
         result = generator.generate(request)
-        return result
+        return {"success": True, "data": result.model_dump()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"success": False, "error": {"code": 500, "message": str(e)}}
 
 @app.get("/health")
 async def health_check():
