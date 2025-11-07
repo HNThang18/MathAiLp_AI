@@ -12,16 +12,26 @@ class LessonPlanGenerator:
         
         # Parse JSON response from AI
         try:
-            lesson_data = json.loads(response)
+            # Clean up response - remove markdown code blocks if present
+            cleaned_response = response.strip()
+            if cleaned_response.startswith('```json'):
+                cleaned_response = cleaned_response.replace('```json\n', '').replace('\n```', '').strip()
+            elif cleaned_response.startswith('```'):
+                cleaned_response = cleaned_response.replace('```\n', '').replace('\n```', '').strip()
+            
+            lesson_data = json.loads(cleaned_response)
             return LessonPlanResponse(**lesson_data)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             # Fallback: extract JSON from markdown code blocks
             import re
-            json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+            json_match = re.search(r'```(?:json)?\n(.*?)\n```', response, re.DOTALL)
             if json_match:
                 lesson_data = json.loads(json_match.group(1))
                 return LessonPlanResponse(**lesson_data)
-            raise ValueError("Unable to parse AI response")
+            # Log the error for debugging
+            print(f"JSON Decode Error: {e}")
+            print(f"Response: {response[:500]}...")  # Print first 500 chars
+            raise ValueError(f"Unable to parse AI response: {str(e)}")
     
     def _build_prompt(self, request: LessonPlanRequest) -> str:
         objectives_text = ""

@@ -85,9 +85,9 @@ async def chat_with_ai(request: ChatRequest):
         gemini = get_gemini_instance("default")
         chat_service = ChatService(gemini)
         result = chat_service.chat(request)
-        return {"success": True, "data": result.model_dump()}
+        return result
     except Exception as e:
-        return {"success": False, "error": {"code": 500, "message": str(e)}}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/generate/lesson-plan")
 async def generate_lesson_plan(request: LessonPlanRequest):
@@ -99,11 +99,17 @@ async def generate_lesson_plan(request: LessonPlanRequest):
     - **duration**: Lesson duration in minutes (30-90)
     """
     try:
+        print(f"[DEBUG] Received request: topic={request.topic}, grade_level={request.grade_level}, duration={request.duration}")
         gemini = get_gemini_instance("lesson_plan")
         generator = LessonPlanGenerator(gemini)
+        print("[DEBUG] Starting generation...")
         result = generator.generate(request)
+        print("[DEBUG] Generation completed successfully")
         return {"success": True, "data": result.model_dump()}
     except Exception as e:
+        print(f"[ERROR] Generation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": {"code": 500, "message": str(e)}}
 
 @app.post("/api/v1/generate/questions")
