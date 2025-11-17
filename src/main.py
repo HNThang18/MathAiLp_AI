@@ -73,20 +73,27 @@ async def chat_with_ai(request: ChatRequest):
     Chat with AI assistant about the Math Learning Platform
     
     - **message**: User's message/question
-    - **conversation_id**: Optional conversation ID for context (coming soon)
+    - **conversation_id**: Optional conversation ID for context
+    - **user_role**: User role (teacher, student, admin, or user)
     
     The AI can help with:
     - Platform overview and features
     - How to use different functionalities
     - Math education tips and guidance
     - General questions about the system
+    - Role-specific assistance
     """
     try:
+        print(f"[DEBUG] Chat request from {request.user_role}: {request.message[:50]}...")
         gemini = get_gemini_instance("default")
         chat_service = ChatService(gemini)
         result = chat_service.chat(request)
+        print("[DEBUG] Chat response generated successfully")
         return result
     except Exception as e:
+        print(f"[ERROR] Chat failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/generate/lesson-plan")
@@ -97,6 +104,8 @@ async def generate_lesson_plan(request: LessonPlanRequest):
     - **topic**: Math topic (e.g., "Phép cộng", "Phân số")
     - **grade_level**: elementary, middle, or high
     - **duration**: Lesson duration in minutes (30-90)
+    - **objectives**: Optional list of learning objectives
+    - **additional_requirements**: Optional additional requirements
     """
     try:
         print(f"[DEBUG] Received request: topic={request.topic}, grade_level={request.grade_level}, duration={request.duration}")
@@ -105,12 +114,12 @@ async def generate_lesson_plan(request: LessonPlanRequest):
         print("[DEBUG] Starting generation...")
         result = generator.generate(request)
         print("[DEBUG] Generation completed successfully")
-        return {"success": True, "data": result.model_dump()}
+        return result.model_dump()
     except Exception as e:
         print(f"[ERROR] Generation failed: {str(e)}")
         import traceback
         traceback.print_exc()
-        return {"success": False, "error": {"code": 500, "message": str(e)}}
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/generate/questions")
 async def generate_questions(request: QuestionRequest):
@@ -119,17 +128,23 @@ async def generate_questions(request: QuestionRequest):
     
     - **topic**: Math topic
     - **grade_level**: Grade level (1-12)
-    - **question_type**: Type of question
+    - **question_type**: Type of question (multiple_choice, true_false, short_answer, essay)
     - **difficulty**: easy, medium, or hard
     - **count**: Number of questions (1-20)
+    - **include_solution**: Include solution (default: true)
     """
     try:
+        print(f"[DEBUG] Generating {request.count} questions for topic: {request.topic}, grade: {request.grade_level}")
         gemini = get_gemini_instance("question_generator")
         generator = QuestionGenerator(gemini)
         result = generator.generate(request)
-        return {"success": True, "data": result.model_dump()}
+        print(f"[DEBUG] Generated {len(result.questions)} questions successfully")
+        return result.model_dump()
     except Exception as e:
-        return {"success": False, "error": {"code": 500, "message": str(e)}}
+        print(f"[ERROR] Question generation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/generate/quiz")
 async def generate_quiz(request: QuizRequest):
@@ -138,19 +153,24 @@ async def generate_quiz(request: QuizRequest):
     
     - **title**: Quiz title
     - **topic**: Math topic
-    - **grade_level**: Grade level (1-12)
+    - **grade_level**: Grade level (1-12 or elementary/middle/high)
     - **duration**: Time limit in minutes (10-120)
     - **question_count**: Number of questions (5-50)
     - **difficulty_distribution**: Optional difficulty distribution (default: easy 30%, medium 50%, hard 20%)
     - **include_essay**: Include essay questions (default: false)
     """
     try:
+        print(f"[DEBUG] Generating quiz: {request.title}, {request.question_count} questions")
         gemini = get_gemini_instance("quiz_generator")
         generator = QuizGenerator(gemini)
         result = generator.generate(request)
-        return {"success": True, "data": result.model_dump()}
+        print(f"[DEBUG] Quiz generated successfully with {len(result.questions)} questions")
+        return result.model_dump()
     except Exception as e:
-        return {"success": False, "error": {"code": 500, "message": str(e)}}
+        print(f"[ERROR] Quiz generation failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():

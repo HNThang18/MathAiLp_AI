@@ -2,6 +2,7 @@ from ..ai.gemini import Gemini
 from ..models.quiz import QuizRequest, QuizResponse
 from ..models.question import Question
 import json
+import re
 
 class QuizGenerator:
     def __init__(self, gemini: Gemini):
@@ -14,32 +15,59 @@ class QuizGenerator:
         prompt = self._build_prompt(request)
         response = self.gemini.generate_response(prompt)
         
+        cleaned_response = ""
+        
         try:
-            quiz_data = json.loads(response)
+            cleaned_response = self._clean_json_response(response)
+            quiz_data = json.loads(cleaned_response)
             return QuizResponse(**quiz_data)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             # Fallback: extract JSON from markdown code blocks
-            import re
-            json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+            json_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', response, re.DOTALL)
             if json_match:
-                quiz_data = json.loads(json_match.group(1))
-                return QuizResponse(**quiz_data)
-            raise ValueError("Unable to parse AI response")
+                try:
+                    cleaned_json = self._clean_json_response(json_match.group(1))
+                    quiz_data = json.loads(cleaned_json)
+                    return QuizResponse(**quiz_data)
+                except json.JSONDecodeError:
+                    pass
+            
+            print(f"JSON Decode Error: {e}")
+            print(f"Response (first 1000 chars): {response[:1000]}...")
+            if cleaned_response:
+                print(f"Cleaned response (first 500 chars): {cleaned_response[:500]}...")
+            raise ValueError(f"Unable to parse AI response. JSON error: {str(e)}")
+    
+    def _clean_json_response(self, text: str) -> str:
+        """Clean and fix common JSON issues from AI responses"""
+        cleaned = text.strip()
+        if cleaned.startswith('```json'):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith('```'):
+            cleaned = cleaned[3:]
+        
+        if cleaned.endswith('```'):
+            cleaned = cleaned[:-3]
+        
+        return cleaned.strip()
     
     def _build_prompt(self, request: QuizRequest) -> str:
         """
         Build detailed prompt for quiz generation
         """
         # Default difficulty distribution if not provided
-        difficulty_dist = request.difficulty_distribution or {
-            "easy": 0.3,
-            "medium": 0.5,
-            "hard": 0.2
-        }
+        if request.difficulty_distribution:
+            easy_percent = request.difficulty_distribution.easy / 100
+            medium_percent = request.difficulty_distribution.medium / 100
+            hard_percent = request.difficulty_distribution.hard / 100
+        else:
+            easy_percent = 0.3
+            medium_percent = 0.5
+            hard_percent = 0.2
         
         # Calculate number of questions per difficulty
-        easy_count = int(request.question_count * difficulty_dist.get("easy", 0.3))
-        medium_count = int(request.question_count * difficulty_dist.get("medium", 0.5))
+        easy_count = int(request.question_count * easy_percent)
+        medium_count = int(request.question_count * medium_percent)
         hard_count = request.question_count - easy_count - medium_count
         
         prompt = f"""Tạo bài kiểm tra/quiz môn Toán với thông tin sau:
@@ -52,9 +80,9 @@ class QuizGenerator:
 - Tổng số câu: {request.question_count}
 
 **Phân bố độ khó:**
-- Dễ: {easy_count} câu ({difficulty_dist.get("easy", 0.3)*100:.0f}%)
-- Trung bình: {medium_count} câu ({difficulty_dist.get("medium", 0.5)*100:.0f}%)
-- Khó: {hard_count} câu ({difficulty_dist.get("hard", 0.2)*100:.0f}%)
+- Dễ: {easy_count} câu ({easy_percent*100:.0f}%)
+- Trung bình: {medium_count} câu ({medium_percent*100:.0f}%)
+- Khó: {hard_count} câu ({hard_percent*100:.0f}%)
 
 **Yêu cầu:**
 1. Tạo câu hỏi đa dạng (trắc nghiệm, tự luận ngắn)
@@ -105,14 +133,17 @@ class QuizGenerator:
         """
         Calculate points for each difficulty level
         """
-        difficulty_dist = request.difficulty_distribution or {
-            "easy": 0.3,
-            "medium": 0.5,
-            "hard": 0.2
-        }
+        if request.difficulty_distribution:
+            easy_percent = request.difficulty_distribution.easy / 100
+            medium_percent = request.difficulty_distribution.medium / 100
+            hard_percent = request.difficulty_distribution.hard / 100
+        else:
+            easy_percent = 0.3
+            medium_percent = 0.5
+            hard_percent = 0.2
         
-        easy_count = int(request.question_count * difficulty_dist.get("easy", 0.3))
-        medium_count = int(request.question_count * difficulty_dist.get("medium", 0.5))
+        easy_count = int(request.question_count * easy_percent)
+        medium_count = int(request.question_count * medium_percent)
         hard_count = request.question_count - easy_count - medium_count
         
         return {

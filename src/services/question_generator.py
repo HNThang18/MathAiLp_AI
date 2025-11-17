@@ -1,6 +1,7 @@
 from ..ai.gemini import Gemini
 from ..models.question import QuestionRequest, QuestionResponse, Question
 import json
+import re
 
 class QuestionGenerator:
     def __init__(self, gemini: Gemini):
@@ -10,16 +11,40 @@ class QuestionGenerator:
         prompt = self._build_prompt(request)
         response = self.gemini.generate_response(prompt)
         
+        cleaned_response = ""
+        
         try:
-            questions_data = json.loads(response)
+            cleaned_response = self._clean_json_response(response)
+            questions_data = json.loads(cleaned_response)
             return QuestionResponse(**questions_data)
-        except json.JSONDecodeError:
-            import re
-            json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+        except json.JSONDecodeError as e:
+            json_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', response, re.DOTALL)
             if json_match:
-                questions_data = json.loads(json_match.group(1))
-                return QuestionResponse(**questions_data)
-            raise ValueError("Unable to parse AI response")
+                try:
+                    cleaned_json = self._clean_json_response(json_match.group(1))
+                    questions_data = json.loads(cleaned_json)
+                    return QuestionResponse(**questions_data)
+                except json.JSONDecodeError:
+                    pass
+            
+            print(f"JSON Decode Error: {e}")
+            print(f"Response (first 1000 chars): {response[:1000]}...")
+            if cleaned_response:
+                print(f"Cleaned response (first 500 chars): {cleaned_response[:500]}...")
+            raise ValueError(f"Unable to parse AI response. JSON error: {str(e)}")
+    
+    def _clean_json_response(self, text: str) -> str:
+        """Clean and fix common JSON issues from AI responses"""
+        cleaned = text.strip()
+        if cleaned.startswith('```json'):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith('```'):
+            cleaned = cleaned[3:]
+        
+        if cleaned.endswith('```'):
+            cleaned = cleaned[:-3]
+        
+        return cleaned.strip()
     
     def _build_prompt(self, request: QuestionRequest) -> str:
         return f"""Tạo {request.count} câu hỏi môn Toán với thông tin:

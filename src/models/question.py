@@ -15,7 +15,7 @@ class DifficultyLevel(str, Enum):
 
 class QuestionRequest(BaseModel):
     topic: str = Field(..., description="Chủ đề câu hỏi")
-    grade_level: str = Field(..., description="Cấp học (1-12)")
+    grade_level: int = Field(..., description="Cấp học (1-12)", ge=1, le=12)
     question_type: QuestionType
     difficulty: DifficultyLevel
     count: int = Field(1, ge=1, le=20, description="Số lượng câu hỏi")
@@ -38,4 +38,4 @@ class Question(BaseModel):
 class QuestionResponse(BaseModel):
     questions: List[Question]
     topic: str
-    grade_level: str
+    grade_level: int

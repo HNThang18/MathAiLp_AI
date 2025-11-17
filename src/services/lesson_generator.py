@@ -1,6 +1,7 @@
 from ..ai.gemini import Gemini
 from ..models.lesson_plan import LessonPlanRequest, LessonPlanResponse
 import json
+import re
 
 class LessonPlanGenerator:
     def __init__(self, gemini: Gemini):
@@ -10,28 +11,54 @@ class LessonPlanGenerator:
         prompt = self._build_prompt(request)
         response = self.gemini.generate_response(prompt)
         
+        cleaned_response = ""
+        
         # Parse JSON response from AI
         try:
             # Clean up response - remove markdown code blocks if present
-            cleaned_response = response.strip()
-            if cleaned_response.startswith('```json'):
-                cleaned_response = cleaned_response.replace('```json\n', '').replace('\n```', '').strip()
-            elif cleaned_response.startswith('```'):
-                cleaned_response = cleaned_response.replace('```\n', '').replace('\n```', '').strip()
+            cleaned_response = self._clean_json_response(response)
             
+            # Try to parse the cleaned response
             lesson_data = json.loads(cleaned_response)
             return LessonPlanResponse(**lesson_data)
         except json.JSONDecodeError as e:
             # Fallback: extract JSON from markdown code blocks
-            import re
-            json_match = re.search(r'```(?:json)?\n(.*?)\n```', response, re.DOTALL)
+            json_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', response, re.DOTALL)
             if json_match:
-                lesson_data = json.loads(json_match.group(1))
-                return LessonPlanResponse(**lesson_data)
+                try:
+                    cleaned_json = self._clean_json_response(json_match.group(1))
+                    lesson_data = json.loads(cleaned_json)
+                    return LessonPlanResponse(**lesson_data)
+                except json.JSONDecodeError:
+                    pass
+            
             # Log the error for debugging
             print(f"JSON Decode Error: {e}")
-            print(f"Response: {response[:500]}...")  # Print first 500 chars
-            raise ValueError(f"Unable to parse AI response: {str(e)}")
+            print(f"Response (first 1000 chars): {response[:1000]}...")
+            if cleaned_response:
+                print(f"Cleaned response (first 500 chars): {cleaned_response[:500]}...")
+            raise ValueError(f"Unable to parse AI response. JSON error: {str(e)}")
+    
+    def _clean_json_response(self, text: str) -> str:
+        """Clean and fix common JSON issues from AI responses"""
+        # Remove markdown code blocks
+        cleaned = text.strip()
+        if cleaned.startswith('```json'):
+            cleaned = cleaned[7:]  # Remove ```json
+        elif cleaned.startswith('```'):
+            cleaned = cleaned[3:]   # Remove ```
+        
+        if cleaned.endswith('```'):
+            cleaned = cleaned[:-3]  # Remove trailing ```
+        
+        cleaned = cleaned.strip()
+        
+        # Fix common LaTeX escape issues in JSON strings
+        # Replace single backslashes with double backslashes for LaTeX
+        # But be careful not to break already escaped characters
+        # This is a simplified approach - the prompt should handle this better
+        
+        return cleaned
     
     def _build_prompt(self, request: LessonPlanRequest) -> str:
         objectives_text = ""

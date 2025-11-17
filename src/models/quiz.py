@@ -2,15 +2,20 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from .question import Question
 
+class DifficultyDistribution(BaseModel):
+    easy: float = Field(0, description="Tỷ lệ % câu dễ (0-100)", ge=0, le=100)
+    medium: float = Field(0, description="Tỷ lệ % câu trung bình (0-100)", ge=0, le=100)
+    hard: float = Field(0, description="Tỷ lệ % câu khó (0-100)", ge=0, le=100)
+
 class QuizRequest(BaseModel):
     title: str = Field(..., description="Tên bài kiểm tra")
     topic: str = Field(..., description="Chủ đề")
-    grade_level: str = Field(..., description="Cấp học (1-12 hoặc elementary/middle/high)")
+    grade_level: int = Field(..., description="Cấp học (1-12)", ge=1, le=12)
     duration: int = Field(..., description="Thời gian làm bài (phút)", ge=10, le=120)
     question_count: int = Field(..., description="Số câu hỏi", ge=5, le=50)
-    difficulty_distribution: Optional[dict] = Field(
+    difficulty_distribution: Optional[DifficultyDistribution] = Field(
         default=None,
-        description="Phân bố độ khó (VD: {'easy': 0.3, 'medium': 0.5, 'hard': 0.2})"
+        description="Phân bố độ khó theo %"
     )
     include_essay: bool = Field(
         default=False,
@@ -31,7 +36,7 @@ class QuizQuestion(BaseModel):
 class QuizResponse(BaseModel):
     title: str
     topic: str
-    grade_level: str
+    grade_level: int
     duration: int
     total_points: int
     questions: List[QuizQuestion]
@@ -45,7 +50,7 @@ class QuizResponse(BaseModel):
             "example": {
                 "title": "Kiểm tra Toán - Phép cộng và trừ",
                 "topic": "Phép cộng và trừ",
-                "grade_level": "3",
+                "grade_level": 3,
                 "duration": 45,
                 "total_points": 10,
                 "instructions": "Học sinh làm bài trong 45 phút...",
